@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VTuber Buddy</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <div class="ambient ambient-one"></div>
+      <div class="ambient ambient-two"></div>
+
+      <main class="stage-card">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">AstrBot Plugin</p>
+            <h1 class="title">VTuber Buddy</h1>
+          </div>
+          <div class="topbar-actions">
+            <span class="provider-pill" id="providerLabel">加载中</span>
+            <button class="ghost-button" id="feedButton" type="button">喂食</button>
+            <button class="solid-button" id="settingsToggle" type="button">设置</button>
+          </div>
+        </header>
+
+        <section class="stage-panel">
+          <div class="speech-bubble" id="speechBubble">你好，我已经在这里了。</div>
+
+          <div class="live2d-frame" id="live2dFrame">
+            <div class="live2d-stage hidden" id="live2dStage"></div>
+
+            <div
+              class="fallback-avatar"
+              id="fallbackAvatar"
+              data-emotion="neutral"
+              data-motion="idle"
+            >
+              <div class="avatar-shadow"></div>
+              <div class="avatar-halo"></div>
+              <div class="avatar-hair"></div>
+              <div class="avatar-face">
+                <div class="avatar-eyes">
+                  <span class="eye eye-left"></span>
+                  <span class="eye eye-right"></span>
+                </div>
+                <div class="avatar-blush blush-left"></div>
+                <div class="avatar-blush blush-right"></div>
+                <div class="avatar-mouth"></div>
+              </div>
+              <div class="avatar-body"></div>
+            </div>
+
+            <button class="touch-zone touch-head" data-area="head" type="button"></button>
+            <button class="touch-zone touch-cheek" data-area="cheek" type="button"></button>
+            <button class="touch-zone touch-body" data-area="body" type="button"></button>
+          </div>
+        </section>
+
+        <section class="status-strip">
+          <article class="status-card">
+            <span>饱食度</span>
+            <strong id="satietyValue">0</strong>
+            <div class="meter"><i id="satietyBar"></i></div>
+          </article>
+          <article class="status-card">
+            <span>心情</span>
+            <strong id="moodValue">0</strong>
+            <div class="meter"><i id="moodBar"></i></div>
+          </article>
+          <article class="status-card">
+            <span>好感</span>
+            <strong id="affectionValue">0</strong>
+            <div class="meter"><i id="affectionBar"></i></div>
+          </article>
+          <article class="status-card status-note">
+            <span>关系</span>
+            <strong id="affectionTitle">刚熟悉</strong>
+            <p id="statusHint">状态稳定</p>
+          </article>
+        </section>
+
+        <section class="trail-panel">
+          <div class="trail-head">
+            <span>最近互动</span>
+            <span class="subtle" id="emotionLabel">neutral</span>
+          </div>
+          <div class="trail-list" id="historyList"></div>
+        </section>
+
+        <form class="chat-bar" id="chatForm">
+          <input
+            id="chatInput"
+            type="text"
+            maxlength="140"
+            autocomplete="off"
+            placeholder="说点什么，或者直接摸摸她..."
+          />
+          <button class="solid-button" id="sendButton" type="submit">发送</button>
+        </form>
+      </main>
+
+      <div class="settings-backdrop hidden" id="settingsBackdrop"></div>
+      <aside class="settings-panel hidden" id="settingsPanel">
+        <div class="settings-head">
+          <div>
+            <p class="eyebrow">Floating Config</p>
+            <h2>伙伴设置</h2>
+          </div>
+          <button class="ghost-button" id="settingsClose" type="button">关闭</button>
+        </div>
+
+        <form id="settingsForm" class="settings-form">
+          <label>
+            <span>伙伴名字</span>
+            <input id="buddyNameInput" name="buddy_name" type="text" maxlength="20" />
+          </label>
+          <label>
+            <span>你的称呼</span>
+            <input id="userNameInput" name="user_name" type="text" maxlength="20" />
+          </label>
+          <label>
+            <span>Live2D 模型 URL</span>
+            <input
+              id="modelUrlInput"
+              name="live2d_model_url"
+              type="url"
+              placeholder="可留空，留空时使用内置占位形象"
+            />
+          </label>
+          <label>
+            <span>主题色</span>
+            <input id="accentInput" name="accent_color" type="color" />
+          </label>
+          <label>
+            <span>附加提示词</span>
+            <textarea
+              id="promptSuffixInput"
+              name="system_prompt_suffix"
+              rows="4"
+              placeholder="例如：语气更软一点，少说教。"
+            ></textarea>
+          </label>
+          <div class="settings-foot">
+            <button class="solid-button" type="submit">保存</button>
+          </div>
+        </form>
+      </aside>
+    </div>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

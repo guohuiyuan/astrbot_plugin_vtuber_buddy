@@ -1,0 +1,1 @@
+"""VTuber Buddy package."""

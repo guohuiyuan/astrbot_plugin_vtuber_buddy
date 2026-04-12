@@ -1,0 +1,50 @@
+{
+  "web_host": {
+    "description": "Web Host",
+    "hint": "VTuber Buddy 本地 Web 应用监听地址，默认只监听 127.0.0.1。",
+    "type": "string",
+    "default": "127.0.0.1"
+  },
+  "web_port": {
+    "description": "Web Port",
+    "hint": "VTuber Buddy 本地 Web 应用监听端口。",
+    "type": "int",
+    "default": 6230
+  },
+  "chat_provider_id": {
+    "description": "Chat Provider ID",
+    "hint": "留空时使用 AstrBot 当前默认聊天模型。",
+    "type": "string",
+    "default": ""
+  },
+  "inherit_default_persona": {
+    "description": "Inherit Default Persona",
+    "hint": "是否把 AstrBot 当前默认 persona 的系统提示拼接到 Buddy 提示词前。",
+    "type": "bool",
+    "default": true
+  },
+  "history_limit": {
+    "description": "History Limit",
+    "hint": "送给 LLM 的最近轮次上限。",
+    "type": "int",
+    "default": 10
+  },
+  "memory_limit": {
+    "description": "Memory Limit",
+    "hint": "每个 Buddy 会话最多保存多少条长期记忆。",
+    "type": "int",
+    "default": 12
+  },
+  "satiety_decay_per_hour": {
+    "description": "Satiety Decay / Hour",
+    "hint": "饱食度每小时衰减值。",
+    "type": "int",
+    "default": 4
+  },
+  "mood_decay_per_hour": {
+    "description": "Mood Decay / Hour",
+    "hint": "心情值每小时基础衰减值。",
+    "type": "int",
+    "default": 2
+  }
+}
