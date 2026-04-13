@@ -13,13 +13,13 @@
   },
   "chat_provider_id": {
     "description": "Chat Provider ID",
-    "hint": "留空时使用 AstrBot 当前默认聊天模型。",
+    "hint": "Buddy 会话固定使用的 AstrBot Provider ID，留空时跟随该会话的当前配置。",
     "type": "string",
     "default": ""
   },
   "inherit_default_persona": {
     "description": "Inherit Default Persona",
-    "hint": "是否把 AstrBot 当前默认 persona 的系统提示拼接到 Buddy 提示词前。",
+    "hint": "兼容保留项。主链路模式下不再单独处理，Buddy 会直接沿用 AstrBot 当前会话的人格与主链路装饰。",
     "type": "bool",
     "default": true
   },
@@ -46,5 +46,11 @@
     "hint": "心情值每小时基础衰减值。",
     "type": "int",
     "default": 2
+  },
+  "request_timeout_seconds": {
+    "description": "Request Timeout Seconds",
+    "hint": "浏览器请求等待 AstrBot 主链路回包的最长秒数。",
+    "type": "int",
+    "default": 60
   }
 }

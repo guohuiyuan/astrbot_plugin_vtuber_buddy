@@ -56,10 +56,12 @@ class BuddyWebServer:
         await self.runner.setup()
         self.site = web.TCPSite(self.runner, self.host, self.port)
         await self.site.start()
+
         socket = getattr(self.site, "_server", None)
         if socket and socket.sockets:
             bound_port = socket.sockets[0].getsockname()[1]
             self.public_url = f"http://{self.host}:{bound_port}"
+
         logger.info("VTuber Buddy web app started at %s", self.public_url)
 
     async def stop(self) -> None:
@@ -88,7 +90,7 @@ class BuddyWebServer:
 
     async def handle_health(self, request: web.Request) -> web.Response:
         del request
-        return web.json_response({"status": "ok", "url": self.public_url})
+        return web.json_response({"status": "ok", "data": {"url": self.public_url}})
 
     async def handle_state(self, request: web.Request) -> web.Response:
         session_id = self._session_id_from_request(request)
@@ -104,7 +106,7 @@ class BuddyWebServer:
     async def handle_feed(self, request: web.Request) -> web.Response:
         session_id = self._session_id_from_request(request)
         payload = await request.json()
-        result = await self.service.feed(session_id, str(payload.get("food", "小零食")))
+        result = await self.service.feed(session_id, str(payload.get("food", "点心")))
         return web.json_response({"status": "ok", "data": result})
 
     async def handle_touch(self, request: web.Request) -> web.Response:

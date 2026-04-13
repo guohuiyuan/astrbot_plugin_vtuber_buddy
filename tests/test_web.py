@@ -4,17 +4,27 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 import pytest
 
-from vtuber_buddy.service import BuddyConversationService
-from vtuber_buddy.store import BuddyStore
-from vtuber_buddy.web import BuddyWebServer
+from data.plugins.astrbot_plugin_vtuber_buddy.vtuber_buddy.bridge import (
+    BuddyBackendResult,
+)
+from data.plugins.astrbot_plugin_vtuber_buddy.vtuber_buddy.service import (
+    BuddyConversationService,
+)
+from data.plugins.astrbot_plugin_vtuber_buddy.vtuber_buddy.store import BuddyStore
+from data.plugins.astrbot_plugin_vtuber_buddy.vtuber_buddy.web import BuddyWebServer
 
 
-class StubModelClient:
-    async def generate_reply(self, **kwargs) -> str:
+class StubChatBackend:
+    async def request_reply(self, **kwargs) -> BuddyBackendResult:
         del kwargs
-        return (
-            '{"reply":"收到，我会一直盯着你。","emotion":"excited",'
-            '"motion":"bounce","memory":"你在写插件"}'
+        return BuddyBackendResult(
+            reply_text="收到，我会一直盯着你。",
+            structured={
+                "reply": "收到，我会一直盯着你。",
+                "emotion": "excited",
+                "motion": "bounce",
+                "memory": "你在写插件",
+            },
         )
 
     def describe(self) -> str:
@@ -25,7 +35,7 @@ class StubModelClient:
 async def test_web_routes_round_trip(tmp_path):
     service = BuddyConversationService(
         store=BuddyStore(tmp_path / "sessions.json"),
-        model_client=StubModelClient(),
+        chat_backend=StubChatBackend(),
         plugin_data_dir=tmp_path,
         runtime_config={},
     )
@@ -48,6 +58,9 @@ async def test_web_routes_round_trip(tmp_path):
         async with TestClient(test_server) as client:
             health = await client.get("/api/health")
             assert health.status == 200
+            health_payload = await health.json()
+            assert health_payload["status"] == "ok"
+            assert "url" in health_payload["data"]
 
             state = await client.get("/api/state", headers={"X-Session-Id": "webtest"})
             state_payload = await state.json()

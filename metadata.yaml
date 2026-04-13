@@ -1,7 +1,7 @@
 name: astrbot_plugin_vtuber_buddy
 display_name: VTuber Buddy
 desc: 紧凑型 Live2D 陪伴 Web 应用插件，带情绪、喂食、触摸和记忆雏形。
-version: v0.1.0
+version: v0.2.0
 author: guohuiyuan
-repo: https://github.com/guohuiyuan/vtuber-buddy
+repo: https://github.com/guohuiyuan/astrbot_plugin_vtuber_buddy
 astrbot_version: ">=4.5.7,<5"
