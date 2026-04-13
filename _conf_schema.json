@@ -13,13 +13,13 @@
   },
   "chat_provider_id": {
     "description": "Chat Provider ID",
-    "hint": "Buddy 会话固定使用的 AstrBot Provider ID，留空时跟随该会话的当前配置。",
+    "hint": "Buddy 会话固定使用的 AstrBot Provider ID，留空时跟随该会话当前配置。",
     "type": "string",
     "default": ""
   },
   "inherit_default_persona": {
     "description": "Inherit Default Persona",
-    "hint": "兼容保留项。主链路模式下不再单独处理，Buddy 会直接沿用 AstrBot 当前会话的人格与主链路装饰。",
+    "hint": "兼容保留项。主链路模式下不再单独处理，Buddy 会直接复用 AstrBot 当前会话的人格与主链路装饰。",
     "type": "bool",
     "default": true
   },

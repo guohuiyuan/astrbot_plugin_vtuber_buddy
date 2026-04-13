@@ -13,6 +13,7 @@ from astrbot.core.astr_main_agent_resources import (
 from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
 
 from .vtuber_buddy.bridge import AstrBotMainChainBackend
+from .vtuber_buddy.live2d_service import BuddyLive2DService
 from .vtuber_buddy.platform import BUDDY_PLATFORM_NAME, BuddyPlatformAdapter
 from .vtuber_buddy.queue_mgr import BuddyQueueManager
 from .vtuber_buddy.service import (
@@ -56,15 +57,21 @@ class Main(Star):
                 self.config.get("request_timeout_seconds", 60)
             ),
         )
+        self.live2d_service = BuddyLive2DService(
+            workspace_root=plugin_data_dir / "live2d_models",
+            builtin_root=plugin_root / "vtuber_buddy" / "builtin_live2d",
+        )
 
         self.service = BuddyConversationService(
             store=store,
             chat_backend=chat_backend,
             plugin_data_dir=plugin_data_dir,
             runtime_config=self.config,
+            live2d_service=self.live2d_service,
         )
         self.web_server = BuddyWebServer(
             service=self.service,
+            live2d_service=self.live2d_service,
             host=str(self.config.get("web_host", "127.0.0.1")),
             port=int(self.config.get("web_port", 6230)),
             template_dir=plugin_root / "vtuber_buddy" / "templates",

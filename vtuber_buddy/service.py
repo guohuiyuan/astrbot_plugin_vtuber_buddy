@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .bridge import BuddyChatBackend
+from .live2d_service import BuddyLive2DService
 from .models import BuddyReply, BuddySession, ChatTurn, MemoryFact, clamp, utc_now
 from .store import BuddyStore
 
@@ -20,7 +21,9 @@ EMOTIONS = {
     "concerned",
     "sleepy",
 }
+
 MOTIONS = {"idle", "wave", "nod", "bounce", "pout", "blink"}
+
 MEMORY_PATTERNS = [
     re.compile(r"我喜欢(?P<fact>[^，。！？\n]{1,24})"),
     re.compile(r"我的生日是(?P<fact>[^，。！？\n]{1,24})"),
@@ -33,11 +36,24 @@ def _parse_iso(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _coerce_bool(value, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 def _title_from_affection(affection: float) -> str:
     if affection >= 75:
         return "最亲密"
     if affection >= 45:
-        return "熟络"
+        return "熟悉"
     return "刚认识"
 
 
@@ -152,7 +168,6 @@ def buddy_reply_from_payload(
         emotion = "neutral"
     if motion not in MOTIONS:
         motion = "idle"
-
     if not reply:
         reply = coerce_buddy_reply(fallback_text).reply
 
@@ -169,11 +184,13 @@ class BuddyConversationService:
         chat_backend: BuddyChatBackend,
         plugin_data_dir: Path,
         runtime_config,
+        live2d_service: BuddyLive2DService | None = None,
     ) -> None:
         self.store = store
         self.chat_backend = chat_backend
         self.plugin_data_dir = plugin_data_dir
         self.runtime_config = runtime_config
+        self.live2d_service = live2d_service
         self._session_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def initialize(self) -> None:
@@ -185,7 +202,12 @@ class BuddyConversationService:
             session = await self.store.load_session(session_id)
             self._apply_decay(session)
             await self.store.save_session(session)
-            return self._session_payload(session)
+        return await self._session_payload(session)
+
+    async def get_live2d_config(self, session_id: str) -> dict:
+        async with self._session_locks[session_id]:
+            session = await self.store.load_session(session_id)
+        return await self._live2d_payload(session)
 
     async def update_settings(self, session_id: str, settings_payload: dict) -> dict:
         async with self._session_locks[session_id]:
@@ -199,21 +221,38 @@ class BuddyConversationService:
                 str(settings_payload.get("user_name", settings.user_name)).strip()
                 or settings.user_name
             )
+            settings.live2d_selection_key = (
+                str(
+                    settings_payload.get(
+                        "live2d_selection_key",
+                        settings.live2d_selection_key,
+                    )
+                ).strip()
+                or settings.live2d_selection_key
+            )
             settings.live2d_model_url = str(
                 settings_payload.get("live2d_model_url", settings.live2d_model_url)
             ).strip()
+            settings.live2d_mouse_follow_enabled = _coerce_bool(
+                settings_payload.get(
+                    "live2d_mouse_follow_enabled",
+                    settings.live2d_mouse_follow_enabled,
+                ),
+                settings.live2d_mouse_follow_enabled,
+            )
             settings.accent_color = (
                 str(settings_payload.get("accent_color", settings.accent_color)).strip()
                 or settings.accent_color
             )
             settings.system_prompt_suffix = str(
                 settings_payload.get(
-                    "system_prompt_suffix", settings.system_prompt_suffix
+                    "system_prompt_suffix",
+                    settings.system_prompt_suffix,
                 )
             ).strip()
             session.updated_at = utc_now()
             await self.store.save_session(session)
-            return self._session_payload(session)
+        return await self._session_payload(session)
 
     async def feed(self, session_id: str, food_name: str = "点心") -> dict:
         async with self._session_locks[session_id]:
@@ -236,7 +275,7 @@ class BuddyConversationService:
             )
             self._trim_history(session)
             await self.store.save_session(session)
-            return self._session_payload(session)
+        return await self._session_payload(session)
 
     async def touch(self, session_id: str, area: str) -> dict:
         async with self._session_locks[session_id]:
@@ -260,7 +299,7 @@ class BuddyConversationService:
                 session.current_emotion = "concerned"
                 session.current_motion = "blink"
                 session.stats.mood = clamp(session.stats.mood - 2)
-                session.speech = "先好好说话，不要乱碰。"
+                session.speech = "先好好说话，不要乱戳。"
 
             self._touch_timestamps(session)
             session.history.append(
@@ -273,7 +312,7 @@ class BuddyConversationService:
             )
             self._trim_history(session)
             await self.store.save_session(session)
-            return self._session_payload(session)
+        return await self._session_payload(session)
 
     async def chat(self, session_id: str, message: str) -> dict:
         async with self._session_locks[session_id]:
@@ -281,7 +320,7 @@ class BuddyConversationService:
             self._apply_decay(session)
             clean_message = str(message).strip()
             if not clean_message:
-                return self._session_payload(session)
+                return await self._session_payload(session)
 
             session.history.append(ChatTurn(role="user", text=clean_message))
             heuristic_memory = self._heuristic_memory(clean_message)
@@ -300,7 +339,7 @@ class BuddyConversationService:
                 )
             except Exception:
                 reply = BuddyReply(
-                    reply="刚才 AstrBot 主链路没把回复送回来，再和我说一次。",
+                    reply="刚才 AstrBot 主链路没有把回复送回来，再和我说一次。",
                     emotion="concerned",
                     motion="blink",
                 )
@@ -308,7 +347,6 @@ class BuddyConversationService:
             session.current_emotion = reply.emotion
             session.current_motion = reply.motion
             session.speech = reply.reply
-
             session.history.append(
                 ChatTurn(
                     role="assistant",
@@ -322,7 +360,7 @@ class BuddyConversationService:
             self._trim_history(session)
             self._touch_timestamps(session)
             await self.store.save_session(session)
-            return self._session_payload(session)
+        return await self._session_payload(session)
 
     def _apply_decay(self, session: BuddySession) -> None:
         now = datetime.now(timezone.utc)
@@ -400,7 +438,16 @@ class BuddyConversationService:
         history_limit = max(8, int(self.runtime_config.get("history_limit", 10)) * 2)
         session.history = session.history[-history_limit:]
 
-    def _session_payload(self, session: BuddySession) -> dict:
+    async def _live2d_payload(self, session: BuddySession) -> dict:
+        if self.live2d_service is None:
+            return {}
+        return await self.live2d_service.build_config(
+            selection_key=session.settings.live2d_selection_key,
+            custom_model_url=session.settings.live2d_model_url,
+            mouse_follow_enabled=session.settings.live2d_mouse_follow_enabled,
+        )
+
+    async def _session_payload(self, session: BuddySession) -> dict:
         return {
             "session_id": session.session_id,
             "speech": session.speech,
@@ -417,4 +464,5 @@ class BuddyConversationService:
             "history": [item.to_dict() for item in session.history[-8:]],
             "memories": [item.to_dict() for item in session.memories[-8:]],
             "provider": self.chat_backend.describe(),
+            "live2d": await self._live2d_payload(session),
         }

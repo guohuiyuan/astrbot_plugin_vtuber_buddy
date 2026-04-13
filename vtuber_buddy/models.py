@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
+from .live2d_constants import DEFAULT_LIVE2D_SELECTION_KEY
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -60,7 +62,9 @@ class MemoryFact:
 class BuddySettings:
     buddy_name: str = "Buddy"
     user_name: str = "主人"
+    live2d_selection_key: str = DEFAULT_LIVE2D_SELECTION_KEY
     live2d_model_url: str = ""
+    live2d_mouse_follow_enabled: bool = True
     accent_color: str = "#ff8a65"
     system_prompt_suffix: str = ""
 
@@ -73,9 +77,17 @@ class BuddySettings:
         return cls(
             buddy_name=str(data.get("buddy_name", "Buddy")).strip() or "Buddy",
             user_name=str(data.get("user_name", "主人")).strip() or "主人",
+            live2d_selection_key=(
+                str(
+                    data.get("live2d_selection_key", DEFAULT_LIVE2D_SELECTION_KEY)
+                ).strip()
+                or DEFAULT_LIVE2D_SELECTION_KEY
+            ),
             live2d_model_url=str(data.get("live2d_model_url", "")).strip(),
-            accent_color=str(data.get("accent_color", "#ff8a65")).strip()
-            or "#ff8a65",
+            live2d_mouse_follow_enabled=bool(
+                data.get("live2d_mouse_follow_enabled", True)
+            ),
+            accent_color=str(data.get("accent_color", "#ff8a65")).strip() or "#ff8a65",
             system_prompt_suffix=str(data.get("system_prompt_suffix", "")).strip(),
         )
 

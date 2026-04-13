@@ -10,6 +10,7 @@ try:
 except ModuleNotFoundError:
     logger = logging.getLogger("vtuber_buddy")
 
+from .live2d_service import BuddyLive2DService
 from .service import BuddyConversationService
 
 
@@ -20,12 +21,14 @@ class BuddyWebServer:
         self,
         *,
         service: BuddyConversationService,
+        live2d_service: BuddyLive2DService,
         host: str,
         port: int,
         template_dir: Path,
         static_dir: Path,
     ) -> None:
         self.service = service
+        self.live2d_service = live2d_service
         self.host = host
         self.port = port
         self.template_dir = template_dir
@@ -46,6 +49,10 @@ class BuddyWebServer:
         app.router.add_get("/", self.handle_index)
         app.router.add_get("/api/health", self.handle_health)
         app.router.add_get("/api/state", self.handle_state)
+        app.router.add_get("/api/live2d/config", self.handle_live2d_config)
+        app.router.add_get(
+            "/api/live2d/assets/{asset_path:.*}", self.handle_live2d_asset
+        )
         app.router.add_post("/api/chat", self.handle_chat)
         app.router.add_post("/api/feed", self.handle_feed)
         app.router.add_post("/api/touch", self.handle_touch)
@@ -96,6 +103,30 @@ class BuddyWebServer:
         session_id = self._session_id_from_request(request)
         payload = await self.service.get_state(session_id)
         return web.json_response({"status": "ok", "data": payload})
+
+    async def handle_live2d_config(self, request: web.Request) -> web.Response:
+        session_id = self._session_id_from_request(request)
+        payload = await self.service.get_live2d_config(session_id)
+        return web.json_response({"status": "ok", "data": payload})
+
+    async def handle_live2d_asset(self, request: web.Request) -> web.StreamResponse:
+        asset_path = request.match_info.get("asset_path", "")
+        try:
+            resolved_path = self.live2d_service.resolve_asset(asset_path)
+        except ValueError as exc:
+            raise web.HTTPBadRequest(text=str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise web.HTTPNotFound(text=str(exc)) from exc
+
+        if resolved_path.name.endswith(".model3.json"):
+            payload = await self.live2d_service.render_model_json(asset_path)
+            return web.Response(
+                text=payload,
+                content_type="application/json",
+                charset="utf-8",
+            )
+
+        return web.FileResponse(resolved_path)
 
     async def handle_chat(self, request: web.Request) -> web.Response:
         session_id = self._session_id_from_request(request)

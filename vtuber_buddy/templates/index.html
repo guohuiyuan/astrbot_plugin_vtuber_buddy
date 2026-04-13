@@ -19,7 +19,7 @@
           </div>
           <div class="topbar-actions">
             <span class="provider-pill" id="providerLabel">加载中</span>
-            <button class="ghost-button" id="feedButton" type="button">喂食</button>
+            <button class="ghost-button" id="feedButton" type="button">投喂</button>
             <button class="solid-button" id="settingsToggle" type="button">设置</button>
           </div>
         </header>
@@ -28,7 +28,14 @@
           <div class="speech-bubble" id="speechBubble">你好，我已经在这里了。</div>
 
           <div class="live2d-frame" id="live2dFrame">
-            <div class="live2d-stage hidden" id="live2dStage"></div>
+            <div class="stage-badges">
+              <span class="provider-pill compact-pill" id="live2dStatus">Live2D 未就绪</span>
+              <span class="provider-pill compact-pill subtle-pill" id="emotionLabel">neutral</span>
+            </div>
+
+            <div class="live2d-stage hidden" id="live2dStage">
+              <canvas id="live2dCanvas"></canvas>
+            </div>
 
             <div
               class="fallback-avatar"
@@ -75,7 +82,7 @@
           </article>
           <article class="status-card status-note">
             <span>关系</span>
-            <strong id="affectionTitle">刚熟悉</strong>
+            <strong id="affectionTitle">刚认识</strong>
             <p id="statusHint">状态稳定</p>
           </article>
         </section>
@@ -83,7 +90,7 @@
         <section class="trail-panel">
           <div class="trail-head">
             <span>最近互动</span>
-            <span class="subtle" id="emotionLabel">neutral</span>
+            <span class="subtle" id="modelRuntimeLabel">等待模型加载</span>
           </div>
           <div class="trail-list" id="historyList"></div>
         </section>
@@ -94,7 +101,7 @@
             type="text"
             maxlength="140"
             autocomplete="off"
-            placeholder="说点什么，或者直接摸摸她..."
+            placeholder="说点什么，或者直接摸摸她……"
           />
           <button class="solid-button" id="sendButton" type="submit">发送</button>
         </form>
@@ -120,14 +127,29 @@
             <input id="userNameInput" name="user_name" type="text" maxlength="20" />
           </label>
           <label>
-            <span>Live2D 模型 URL</span>
+            <span>内置 Live2D</span>
+            <select id="modelSelect" name="live2d_selection_key"></select>
+          </label>
+          <label>
+            <span>外部模型 URL</span>
             <input
               id="modelUrlInput"
               name="live2d_model_url"
               type="url"
-              placeholder="可留空，留空时使用内置占位形象"
+              placeholder="留空时使用上面的内置模型"
             />
           </label>
+          <p class="settings-tip">
+            外部 URL 有值时会覆盖内置模型，但动作和表情映射可能不可用。
+          </p>
+          <label class="checkbox-row">
+            <input id="mouseFollowInput" name="live2d_mouse_follow_enabled" type="checkbox" />
+            <span>开启视线跟随</span>
+          </label>
+          <div class="settings-inline-actions">
+            <button class="ghost-button" id="resetViewButton" type="button">重置视角</button>
+            <button class="ghost-button" id="clearCustomModelButton" type="button">清空外链</button>
+          </div>
           <label>
             <span>主题色</span>
             <input id="accentInput" name="accent_color" type="color" />
@@ -138,7 +160,7 @@
               id="promptSuffixInput"
               name="system_prompt_suffix"
               rows="4"
-              placeholder="例如：语气更软一点，少说教。"
+              placeholder="例如：语气更轻一点，少说教。"
             ></textarea>
           </label>
           <div class="settings-foot">
@@ -148,6 +170,9 @@
       </aside>
     </div>
 
+    <script src="/static/vendor/pixi.min.js"></script>
+    <script src="/static/vendor/live2dcubismcore.min.js"></script>
+    <script src="/static/vendor/cubism4.min.js"></script>
     <script src="/static/app.js" defer></script>
   </body>
 </html>
