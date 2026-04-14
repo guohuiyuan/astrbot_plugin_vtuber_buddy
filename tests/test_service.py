@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -46,63 +46,98 @@ def build_live2d_service(tmp_path):
     return service, selection_key
 
 
-@pytest.mark.asyncio
-async def test_state_decay_and_feed_cycle(tmp_path):
-    live2d_service, _ = build_live2d_service(tmp_path)
-    store = BuddyStore(tmp_path / "sessions.json")
+def build_service(tmp_path, **runtime_config):
+    live2d_service, selection_key = build_live2d_service(tmp_path)
     service = BuddyConversationService(
-        store=store,
+        store=BuddyStore(tmp_path / "buddy_state.sqlite3"),
         chat_backend=StubChatBackend(
-            reply_text="",
+            reply_text="记住了。",
             structured={
-                "reply": "好的。",
-                "emotion": "neutral",
-                "motion": "idle",
-                "memory": "",
-            },
-        ),
-        plugin_data_dir=tmp_path,
-        runtime_config={"satiety_decay_per_hour": 5, "mood_decay_per_hour": 3},
-        live2d_service=live2d_service,
-    )
-    await service.initialize()
-
-    session = await store.load_session("test-session")
-    session.stats.updated_at = (
-        datetime.now(timezone.utc) - timedelta(hours=2)
-    ).isoformat(timespec="seconds")
-    await store.save_session(session)
-
-    decayed = await service.get_state("test-session")
-    assert decayed["stats"]["satiety"] <= 62.1
-    assert decayed["stats"]["mood"] <= 72.1
-    assert decayed["live2d"]["available"] is True
-
-    fed = await service.feed("test-session", "布丁")
-    assert fed["speech"].startswith("布丁收到了")
-    assert fed["stats"]["satiety"] > decayed["stats"]["satiety"]
-    assert fed["live2d"]["model_name"] == "sample"
-
-
-@pytest.mark.asyncio
-async def test_chat_can_store_memory_without_duplicates(tmp_path):
-    live2d_service, _ = build_live2d_service(tmp_path)
-    store = BuddyStore(tmp_path / "sessions.json")
-    service = BuddyConversationService(
-        store=store,
-        chat_backend=StubChatBackend(
-            reply_text="抹茶我记住了。",
-            structured={
-                "reply": "抹茶我记住了。",
+                "reply": "记住了。",
                 "emotion": "happy",
                 "motion": "wave",
                 "memory": "你喜欢抹茶",
             },
         ),
         plugin_data_dir=tmp_path,
-        runtime_config={"memory_limit": 8},
+        runtime_config=runtime_config,
         live2d_service=live2d_service,
     )
+    return service, selection_key
+
+
+@pytest.mark.asyncio
+async def test_state_decay_feed_clean_and_sqlite_persistence(tmp_path):
+    service, _ = build_service(
+        tmp_path,
+        satiety_decay_per_hour=240,
+        cleanliness_decay_per_hour=220,
+        mood_decay_per_hour=12,
+    )
+    await service.initialize()
+
+    session = await service.store.load_session("pet")
+    session.stats.coins = 50
+    session.stats.satiety = 600
+    session.stats.cleanliness = 700
+    session.stats.illness = 35
+    session.stats.updated_at = (
+        datetime.now(UTC) - timedelta(hours=2)
+    ).isoformat(timespec="seconds")
+    await service.store.save_session(session)
+
+    decayed = await service.get_state("pet")
+    assert decayed["stats"]["satiety"] < 15
+    assert decayed["stats"]["cleanliness"] < 10
+    assert decayed["stats"]["illness"] >= 30
+    assert decayed["live2d"]["available"] is True
+
+    fed = await service.feed("pet")
+    assert "收到" in fed["speech"]
+    assert fed["stats"]["coins"] == decayed["stats"]["coins"] - 12
+    assert fed["stats"]["satiety"] > decayed["stats"]["satiety"]
+
+    cleaned = await service.clean("pet")
+    assert "洗香香" in cleaned["speech"]
+    assert cleaned["stats"]["coins"] == fed["stats"]["coins"] - 10
+    assert cleaned["stats"]["cleanliness"] > fed["stats"]["cleanliness"]
+    assert cleaned["stats"]["illness"] < decayed["stats"]["illness"]
+
+    reloaded = await service.store.load_session("pet")
+    assert reloaded.stats.coins == cleaned["stats"]["coins"]
+    assert reloaded.speech == cleaned["speech"]
+    assert (tmp_path / "buddy_state.sqlite3").read_bytes()[:16] == b"SQLite format 3\x00"
+
+
+@pytest.mark.asyncio
+async def test_work_cycle_settles_reward_and_costs(tmp_path):
+    service, _ = build_service(tmp_path, work_duration_minutes=15)
+    await service.initialize()
+
+    started = await service.work("worker")
+    assert started["work"]["status"] == "working"
+    assert "分钟后回来" in started["speech"]
+    spent_energy = started["stats"]["energy"]
+
+    session = await service.store.load_session("worker")
+    reward_coins = session.work.reward_coins
+    reward_exp = session.work.reward_experience
+    session.work.finish_at = (datetime.now(UTC) - timedelta(minutes=1)).isoformat(
+        timespec="seconds"
+    )
+    await service.store.save_session(session)
+
+    settled = await service.work("worker")
+    assert settled["work"]["status"] == "idle"
+    assert settled["stats"]["coins"] >= 120 + reward_coins
+    assert settled["stats"]["experience"] >= reward_exp
+    assert "收工" in settled["speech"]
+    assert spent_energy < 78
+
+
+@pytest.mark.asyncio
+async def test_chat_can_store_memory_without_duplicates(tmp_path):
+    service, _ = build_service(tmp_path, memory_limit=8)
     await service.initialize()
 
     result = await service.chat("memory-session", "我喜欢抹茶")
@@ -126,7 +161,7 @@ async def test_chat_falls_back_when_backend_fails(tmp_path):
             return "broken"
 
     service = BuddyConversationService(
-        store=BuddyStore(tmp_path / "sessions.json"),
+        store=BuddyStore(tmp_path / "buddy_state.sqlite3"),
         chat_backend=FailingBackend(),
         plugin_data_dir=tmp_path,
         runtime_config={},
@@ -141,14 +176,7 @@ async def test_chat_falls_back_when_backend_fails(tmp_path):
 
 @pytest.mark.asyncio
 async def test_update_settings_can_switch_live2d_mode(tmp_path):
-    live2d_service, selection_key = build_live2d_service(tmp_path)
-    service = BuddyConversationService(
-        store=BuddyStore(tmp_path / "sessions.json"),
-        chat_backend=StubChatBackend(reply_text="ok"),
-        plugin_data_dir=tmp_path,
-        runtime_config={},
-        live2d_service=live2d_service,
-    )
+    service, selection_key = build_service(tmp_path)
     await service.initialize()
 
     payload = await service.update_settings(

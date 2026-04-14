@@ -49,7 +49,10 @@ class Main(Star):
             queue_mgr=self.queue_mgr,
         )
 
-        store = BuddyStore(plugin_data_dir / "sessions.json")
+        store = BuddyStore(
+            plugin_data_dir / "buddy_state.sqlite3",
+            legacy_json_path=plugin_data_dir / "sessions.json",
+        )
         chat_backend = AstrBotMainChainBackend(
             adapter=self.platform_adapter,
             configured_provider_id=str(self.config.get("chat_provider_id", "")).strip(),
@@ -144,7 +147,8 @@ class Main(Star):
     async def buddy_entry(self, event: AstrMessageEvent):
         """Return the local VTuber Buddy URL."""
         yield event.plain_result(
-            f"VTuber Buddy 已启动：{self.web_server.public_url}\n在浏览器中打开即可使用。"
+            f"VTuber Buddy 已启动：{self.web_server.public_url}\n"
+            "在浏览器里打开即可使用。"
         )
 
     @filter.command("buddy_status", alias={"伙伴状态"})

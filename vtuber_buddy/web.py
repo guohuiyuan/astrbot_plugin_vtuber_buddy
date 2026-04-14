@@ -55,6 +55,8 @@ class BuddyWebServer:
         )
         app.router.add_post("/api/chat", self.handle_chat)
         app.router.add_post("/api/feed", self.handle_feed)
+        app.router.add_post("/api/clean", self.handle_clean)
+        app.router.add_post("/api/work", self.handle_work)
         app.router.add_post("/api/touch", self.handle_touch)
         app.router.add_post("/api/settings", self.handle_settings)
         app.router.add_static("/static/", str(self.static_dir))
@@ -137,7 +139,19 @@ class BuddyWebServer:
     async def handle_feed(self, request: web.Request) -> web.Response:
         session_id = self._session_id_from_request(request)
         payload = await request.json()
-        result = await self.service.feed(session_id, str(payload.get("food", "点心")))
+        result = await self.service.feed(session_id, str(payload.get("food", "营养餐")))
+        return web.json_response({"status": "ok", "data": result})
+
+    async def handle_clean(self, request: web.Request) -> web.Response:
+        session_id = self._session_id_from_request(request)
+        await request.json()
+        result = await self.service.clean(session_id)
+        return web.json_response({"status": "ok", "data": result})
+
+    async def handle_work(self, request: web.Request) -> web.Response:
+        session_id = self._session_id_from_request(request)
+        await request.json()
+        result = await self.service.work(session_id)
         return web.json_response({"status": "ok", "data": result})
 
     async def handle_touch(self, request: web.Request) -> web.Response:

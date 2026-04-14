@@ -13,25 +13,25 @@
   },
   "chat_provider_id": {
     "description": "Chat Provider ID",
-    "hint": "Buddy 会话固定使用的 AstrBot Provider ID，留空时跟随该会话当前配置。",
+    "hint": "Buddy 会话固定使用的 AstrBot Provider ID，留空时跟随当前会话配置。",
     "type": "string",
     "default": ""
   },
   "inherit_default_persona": {
     "description": "Inherit Default Persona",
-    "hint": "兼容保留项。主链路模式下不再单独处理，Buddy 会直接复用 AstrBot 当前会话的人格与主链路装饰。",
+    "hint": "兼容保留项。主链路模式下 Buddy 会直接复用 AstrBot 当前会话的人格与主链路装饰。",
     "type": "bool",
     "default": true
   },
   "history_limit": {
     "description": "History Limit",
-    "hint": "送给 LLM 的最近轮次上限。",
+    "hint": "保留在 Buddy 会话中的最近轮次上限。",
     "type": "int",
     "default": 10
   },
   "memory_limit": {
     "description": "Memory Limit",
-    "hint": "每个 Buddy 会话最多保存多少条长期记忆。",
+    "hint": "每个 Buddy 会话最多保留多少条长期记忆。",
     "type": "int",
     "default": 12
   },
@@ -39,13 +39,43 @@
     "description": "Satiety Decay / Hour",
     "hint": "饱食度每小时衰减值。",
     "type": "int",
-    "default": 4
+    "default": 150
+  },
+  "cleanliness_decay_per_hour": {
+    "description": "Cleanliness Decay / Hour",
+    "hint": "清洁度每小时衰减值。",
+    "type": "int",
+    "default": 130
   },
   "mood_decay_per_hour": {
     "description": "Mood Decay / Hour",
     "hint": "心情值每小时基础衰减值。",
     "type": "int",
+    "default": 18
+  },
+  "energy_recovery_per_hour": {
+    "description": "Energy Recovery / Hour",
+    "hint": "非工作状态下每小时恢复的精力值。",
+    "type": "int",
+    "default": 90
+  },
+  "growth_exp_per_hour": {
+    "description": "Growth Exp / Hour",
+    "hint": "离线成长时每小时获得的基础成长值。",
+    "type": "int",
+    "default": 100
+  },
+  "affection_decay_per_hour": {
+    "description": "Affection Decay / Hour",
+    "hint": "长时间不互动时的亲密衰减速度。",
+    "type": "int",
     "default": 2
+  },
+  "work_duration_minutes": {
+    "description": "Work Duration Minutes",
+    "hint": "每次打工默认持续分钟数。",
+    "type": "int",
+    "default": 45
   },
   "request_timeout_seconds": {
     "description": "Request Timeout Seconds",

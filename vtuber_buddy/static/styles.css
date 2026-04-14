@@ -1,6 +1,5 @@
 :root {
   --bg: #f1e4cf;
-  --bg-deep: #d9c19a;
   --panel: rgba(255, 248, 236, 0.84);
   --panel-strong: rgba(255, 248, 236, 0.94);
   --ink: #2a2019;
@@ -38,7 +37,7 @@ body {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 18px;
+  padding: 16px;
   overflow: hidden;
 }
 
@@ -68,8 +67,8 @@ body {
 
 .stage-card {
   position: relative;
-  width: min(880px, 100%);
-  padding: 18px;
+  width: min(920px, 100%);
+  padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: calc(var(--radius-lg) + 8px);
   background:
@@ -81,7 +80,6 @@ body {
 
 .topbar,
 .topbar-actions,
-.status-strip,
 .trail-head,
 .settings-head,
 .settings-foot,
@@ -117,7 +115,7 @@ body {
 .topbar-actions {
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
 
 .provider-pill,
@@ -143,7 +141,7 @@ body {
 .provider-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 38px;
+  min-height: 36px;
   padding: 0 14px;
   font-size: 13px;
 }
@@ -161,8 +159,8 @@ body {
 
 .ghost-button,
 .solid-button {
-  min-height: 40px;
-  padding: 0 16px;
+  min-height: 38px;
+  padding: 0 14px;
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
@@ -170,6 +168,13 @@ body {
 .ghost-button:hover,
 .solid-button:hover {
   transform: translateY(-1px);
+}
+
+.ghost-button:disabled,
+.solid-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+  transform: none;
 }
 
 .solid-button {
@@ -183,15 +188,15 @@ body {
   position: relative;
   display: grid;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .speech-bubble {
   position: absolute;
-  top: 18px;
-  left: 18px;
+  top: 16px;
+  left: 16px;
   z-index: 3;
-  max-width: min(320px, calc(100% - 36px));
+  max-width: min(320px, calc(100% - 32px));
   padding: 14px 16px;
   border: 1px solid rgba(255, 255, 255, 0.72);
   background: rgba(255, 252, 247, 0.92);
@@ -202,7 +207,7 @@ body {
 
 .live2d-frame {
   position: relative;
-  min-height: 420px;
+  min-height: 430px;
   border-radius: 32px;
   border: 1px solid rgba(255, 255, 255, 0.68);
   background:
@@ -214,21 +219,21 @@ body {
 
 .stage-badges {
   position: absolute;
-  top: 18px;
-  right: 18px;
+  top: 16px;
+  right: 16px;
   z-index: 3;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
-  max-width: calc(100% - 36px);
+  max-width: calc(100% - 32px);
 }
 
 .live2d-frame::after {
   content: "";
   position: absolute;
   inset: auto 0 0;
-  height: 110px;
+  height: 112px;
   background: linear-gradient(180deg, transparent, rgba(107, 75, 51, 0.16));
 }
 
@@ -285,8 +290,7 @@ body {
   width: 208px;
   height: 180px;
   border-radius: 54% 46% 45% 55% / 42% 41% 59% 58%;
-  background:
-    linear-gradient(180deg, #6f4a36, #8e6648 45%, #ad855a 100%);
+  background: linear-gradient(180deg, #6f4a36, #8e6648 45%, #ad855a 100%);
   box-shadow: inset 0 -10px 22px rgba(255, 255, 255, 0.16);
 }
 
@@ -420,23 +424,24 @@ body {
   transform: translateX(-50%);
 }
 
-.status-strip {
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 14px;
-  flex-wrap: wrap;
+  margin-top: 12px;
 }
 
 .status-card {
-  flex: 1 1 160px;
-  min-height: 102px;
+  min-height: 96px;
   padding: 12px 14px;
   border: 1px solid var(--line);
-  background: rgba(255, 251, 246, 0.7);
+  background: rgba(255, 251, 246, 0.72);
 }
 
 .status-card span,
-.status-note p,
-.subtle {
+.subtle,
+.settings-form span,
+.status-card p {
   color: var(--muted);
 }
 
@@ -451,6 +456,20 @@ body {
   display: block;
   margin: 8px 0 12px;
   font-size: 24px;
+}
+
+.meta-card strong {
+  margin-bottom: 6px;
+}
+
+.meta-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.wide-card {
+  grid-column: span 2;
 }
 
 .meter {
@@ -470,12 +489,6 @@ body {
   transition: width 220ms ease;
 }
 
-.status-note p {
-  margin: 8px 0 0;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 .trail-panel {
   margin-top: 12px;
   padding: 12px 14px;
@@ -491,7 +504,7 @@ body {
 .trail-list {
   display: grid;
   gap: 8px;
-  max-height: 120px;
+  max-height: 128px;
   overflow: auto;
 }
 
@@ -543,7 +556,7 @@ body {
   top: 24px;
   right: 24px;
   z-index: 10;
-  width: min(380px, calc(100vw - 30px));
+  width: min(380px, calc(100vw - 28px));
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.58);
   background: rgba(255, 248, 239, 0.96);
@@ -564,11 +577,6 @@ body {
 .settings-form label {
   display: grid;
   gap: 6px;
-}
-
-.settings-form span {
-  font-size: 13px;
-  color: var(--muted);
 }
 
 .settings-form input,
@@ -653,6 +661,16 @@ body {
   }
 }
 
+@media (max-width: 860px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wide-card {
+    grid-column: span 2;
+  }
+}
+
 @media (max-width: 720px) {
   .app-shell {
     padding: 10px;
@@ -686,6 +704,14 @@ body {
 
   .live2d-frame {
     min-height: 360px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wide-card {
+    grid-column: auto;
   }
 
   .settings-panel {

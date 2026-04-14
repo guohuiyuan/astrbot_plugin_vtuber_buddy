@@ -29,6 +29,8 @@ const elements = {
   live2dStatus: document.getElementById("live2dStatus"),
   modelRuntimeLabel: document.getElementById("modelRuntimeLabel"),
   feedButton: document.getElementById("feedButton"),
+  cleanButton: document.getElementById("cleanButton"),
+  workButton: document.getElementById("workButton"),
   settingsToggle: document.getElementById("settingsToggle"),
   settingsClose: document.getElementById("settingsClose"),
   settingsBackdrop: document.getElementById("settingsBackdrop"),
@@ -40,12 +42,23 @@ const elements = {
   historyList: document.getElementById("historyList"),
   emotionLabel: document.getElementById("emotionLabel"),
   affectionTitle: document.getElementById("affectionTitle"),
+  conditionLabel: document.getElementById("conditionLabel"),
   statusHint: document.getElementById("statusHint"),
+  levelValue: document.getElementById("levelValue"),
+  expValue: document.getElementById("expValue"),
+  coinsValue: document.getElementById("coinsValue"),
+  workLabel: document.getElementById("workLabel"),
   satietyValue: document.getElementById("satietyValue"),
+  cleanlinessValue: document.getElementById("cleanlinessValue"),
   moodValue: document.getElementById("moodValue"),
+  energyValue: document.getElementById("energyValue"),
+  healthValue: document.getElementById("healthValue"),
   affectionValue: document.getElementById("affectionValue"),
   satietyBar: document.getElementById("satietyBar"),
+  cleanlinessBar: document.getElementById("cleanlinessBar"),
   moodBar: document.getElementById("moodBar"),
+  energyBar: document.getElementById("energyBar"),
+  healthBar: document.getElementById("healthBar"),
   affectionBar: document.getElementById("affectionBar"),
   buddyNameInput: document.getElementById("buddyNameInput"),
   userNameInput: document.getElementById("userNameInput"),
@@ -99,6 +112,8 @@ async function requestJson(path, options = {}) {
 function setBusy(isBusy) {
   elements.sendButton.disabled = isBusy;
   elements.feedButton.disabled = isBusy;
+  elements.cleanButton.disabled = isBusy;
+  elements.workButton.disabled = isBusy;
   elements.chatInput.disabled = isBusy;
 }
 
@@ -997,6 +1012,229 @@ async function bootstrap() {
   registerEvents();
   scheduleRefresh();
   await fetchState();
+}
+
+function setBusy(isBusy) {
+  elements.sendButton.disabled = isBusy;
+  elements.feedButton.disabled = isBusy;
+  elements.cleanButton.disabled = isBusy;
+  elements.workButton.disabled = isBusy;
+  elements.chatInput.disabled = isBusy;
+}
+
+function renderHistory(history) {
+  elements.historyList.innerHTML = "";
+  for (const item of (history || []).slice(-6).reverse()) {
+    const row = document.createElement("div");
+    row.className = "trail-item";
+    row.innerHTML = `<b>${item.role === "assistant" ? "Buddy" : "你"}</b><span>${escapeHtml(item.text)}</span>`;
+    elements.historyList.appendChild(row);
+  }
+}
+
+function renderModelOptions(live2dConfig, selectedKey) {
+  const models = Array.isArray(live2dConfig?.models) ? live2dConfig.models : [];
+  elements.modelSelect.innerHTML = "";
+
+  if (models.length === 0) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "未发现本地 Live2D 模型";
+    elements.modelSelect.appendChild(option);
+    elements.modelSelect.disabled = true;
+    return;
+  }
+
+  for (const model of models) {
+    const option = document.createElement("option");
+    option.value = model.selection_key;
+    option.textContent = `${model.directory_name || model.model_name} (${model.source === "builtin" ? "内置" : "工作区"})`;
+    elements.modelSelect.appendChild(option);
+  }
+
+  elements.modelSelect.disabled = false;
+  elements.modelSelect.value = selectedKey || models[0].selection_key;
+}
+
+function describeLive2D(config) {
+  if (!config || !config.available) {
+    return {
+      badge: "Live2D 未发现",
+      runtime: "回退到占位立绘",
+    };
+  }
+  if (config.is_custom_model) {
+    return {
+      badge: "Live2D 外链",
+      runtime: "当前使用外部模型 URL",
+    };
+  }
+  return {
+    badge: `Live2D ${config.source === "builtin" ? "内置" : "工作区"}`,
+    runtime: `${config.directory_name || config.model_name} 已激活`,
+  };
+}
+
+function syncMetaCards(payload) {
+  elements.affectionTitle.textContent = payload.stats.title;
+  elements.conditionLabel.textContent = payload.stats.condition;
+  elements.statusHint.textContent = payload.stats.status_hint;
+  elements.levelValue.textContent = `Lv.${payload.stats.level}`;
+  elements.expValue.textContent = `成长 ${payload.stats.experience} / ${payload.stats.next_level_experience}`;
+  elements.coinsValue.textContent = String(payload.stats.coins);
+  elements.workLabel.textContent =
+    payload.work?.status === "working"
+      ? `${payload.work.label} · ${payload.work.remaining_minutes} 分钟`
+      : "空闲";
+  elements.workButton.textContent =
+    payload.work?.status === "working" ? "收工中" : "打工";
+}
+
+async function renderState(payload) {
+  const previousPayload = state.payload;
+  const speechChanged = (previousPayload?.speech || "") !== (payload.speech || "");
+  const emotionChanged =
+    (previousPayload?.current_emotion || "") !== (payload.current_emotion || "");
+  const motionChanged =
+    (previousPayload?.current_motion || "") !== (payload.current_motion || "");
+
+  state.payload = payload;
+  state.live2dConfig = payload.live2d || null;
+
+  elements.speechBubble.textContent =
+    payload.speech || "我在这里，今天也会好好陪着你。";
+  elements.providerLabel.textContent = payload.provider || "未连接";
+  elements.emotionLabel.textContent = payload.current_emotion || "neutral";
+
+  updateMeter(elements.satietyValue, elements.satietyBar, payload.stats.satiety);
+  updateMeter(
+    elements.cleanlinessValue,
+    elements.cleanlinessBar,
+    payload.stats.cleanliness
+  );
+  updateMeter(elements.moodValue, elements.moodBar, payload.stats.mood);
+  updateMeter(elements.energyValue, elements.energyBar, payload.stats.energy);
+  updateMeter(elements.healthValue, elements.healthBar, payload.stats.health);
+  updateMeter(
+    elements.affectionValue,
+    elements.affectionBar,
+    payload.stats.affection
+  );
+
+  syncMetaCards(payload);
+
+  elements.buddyNameInput.value = payload.settings.buddy_name || "";
+  elements.userNameInput.value = payload.settings.user_name || "";
+  elements.modelUrlInput.value = payload.settings.live2d_model_url || "";
+  elements.mouseFollowInput.checked = Boolean(
+    payload.settings.live2d_mouse_follow_enabled
+  );
+  elements.accentInput.value = payload.settings.accent_color || "#ff8a65";
+  elements.promptSuffixInput.value = payload.settings.system_prompt_suffix || "";
+
+  renderModelOptions(payload.live2d, payload.settings.live2d_selection_key);
+  renderHistory(payload.history || []);
+  applyAccent(payload.settings.accent_color);
+  updateFallbackAvatar(payload.current_emotion, payload.current_motion);
+
+  const live2dDescription = describeLive2D(payload.live2d);
+  elements.live2dStatus.textContent = live2dDescription.badge;
+  elements.modelRuntimeLabel.textContent = live2dDescription.runtime;
+
+  if (speechChanged) {
+    triggerSpeechAnimation(payload.speech || "");
+  }
+
+  await syncLive2D(payload.live2d, {
+    emotion: payload.current_emotion,
+    motion: payload.current_motion,
+    emotionChanged,
+    motionChanged,
+  });
+}
+
+async function feedBuddy() {
+  setBusy(true);
+  try {
+    const payload = await requestJson("/api/feed", {
+      method: "POST",
+      body: JSON.stringify({ food: "营养餐" }),
+    });
+    await renderState(payload);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function cleanBuddy() {
+  setBusy(true);
+  try {
+    const payload = await requestJson("/api/clean", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    await renderState(payload);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function workBuddy() {
+  setBusy(true);
+  try {
+    const payload = await requestJson("/api/work", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    await renderState(payload);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function registerEvents() {
+  elements.chatForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const message = elements.chatInput.value.trim();
+    if (!message) {
+      return;
+    }
+    elements.chatInput.value = "";
+    await sendChat(message);
+  });
+
+  elements.feedButton.addEventListener("click", () => {
+    feedBuddy().catch(console.error);
+  });
+  elements.cleanButton.addEventListener("click", () => {
+    cleanBuddy().catch(console.error);
+  });
+  elements.workButton.addEventListener("click", () => {
+    workBuddy().catch(console.error);
+  });
+
+  elements.settingsToggle.addEventListener("click", openSettings);
+  elements.settingsClose.addEventListener("click", closeSettings);
+  elements.settingsBackdrop.addEventListener("click", closeSettings);
+
+  elements.settingsForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await saveSettings();
+  });
+
+  elements.resetViewButton.addEventListener("click", () => {
+    resetLive2DView();
+  });
+
+  elements.clearCustomModelButton.addEventListener("click", () => {
+    elements.modelUrlInput.value = "";
+  });
+
+  document.querySelectorAll(".touch-zone").forEach((button) => {
+    button.addEventListener("click", () => {
+      touchBuddy(button.dataset.area || "head").catch(console.error);
+    });
+  });
 }
 
 bootstrap().catch((error) => {

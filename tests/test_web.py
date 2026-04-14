@@ -24,9 +24,9 @@ class StubChatBackend:
     async def request_reply(self, **kwargs) -> BuddyBackendResult:
         del kwargs
         return BuddyBackendResult(
-            reply_text="收到，我会一直盯着你。",
+            reply_text="收到，我会一直看着你。",
             structured={
-                "reply": "收到，我会一直盯着你。",
+                "reply": "收到，我会一直看着你。",
                 "emotion": "excited",
                 "motion": "bounce",
                 "memory": "你在写插件",
@@ -46,10 +46,10 @@ def build_services(tmp_path):
         default_selection_key=selection_key,
     )
     service = BuddyConversationService(
-        store=BuddyStore(tmp_path / "sessions.json"),
+        store=BuddyStore(tmp_path / "buddy_state.sqlite3"),
         chat_backend=StubChatBackend(),
         plugin_data_dir=tmp_path,
-        runtime_config={},
+        runtime_config={"work_duration_minutes": 10},
         live2d_service=live2d_service,
     )
     return service, live2d_service
@@ -75,6 +75,9 @@ async def test_web_routes_round_trip(tmp_path):
     app.router.add_get("/api/live2d/config", server.handle_live2d_config)
     app.router.add_get("/api/live2d/assets/{asset_path:.*}", server.handle_live2d_asset)
     app.router.add_post("/api/chat", server.handle_chat)
+    app.router.add_post("/api/feed", server.handle_feed)
+    app.router.add_post("/api/clean", server.handle_clean)
+    app.router.add_post("/api/work", server.handle_work)
 
     async with TestServer(app) as test_server:
         async with TestClient(test_server) as client:
@@ -88,6 +91,33 @@ async def test_web_routes_round_trip(tmp_path):
             state_payload = await state.json()
             assert state_payload["status"] == "ok"
             assert state_payload["data"]["live2d"]["available"] is True
+            assert state_payload["data"]["stats"]["coins"] == 120
+
+            feed = await client.post(
+                "/api/feed",
+                headers={"X-Session-Id": "webtest"},
+                json={"food": "营养餐"},
+            )
+            feed_payload = await feed.json()
+            assert "收到" in feed_payload["data"]["speech"]
+            assert feed_payload["data"]["stats"]["coins"] == 108
+
+            clean = await client.post(
+                "/api/clean",
+                headers={"X-Session-Id": "webtest"},
+                json={},
+            )
+            clean_payload = await clean.json()
+            assert "洗香香" in clean_payload["data"]["speech"]
+            assert clean_payload["data"]["stats"]["coins"] == 98
+
+            work = await client.post(
+                "/api/work",
+                headers={"X-Session-Id": "webtest"},
+                json={},
+            )
+            work_payload = await work.json()
+            assert work_payload["data"]["work"]["status"] == "working"
 
             live2d = await client.get(
                 "/api/live2d/config", headers={"X-Session-Id": "webtest"}
@@ -109,5 +139,5 @@ async def test_web_routes_round_trip(tmp_path):
             )
             chat_payload = await chat.json()
             assert chat_payload["status"] == "ok"
-            assert chat_payload["data"]["speech"] == "收到，我会一直盯着你。"
+            assert chat_payload["data"]["speech"] == "收到，我会一直看着你。"
             assert chat_payload["data"]["memories"][0]["content"] == "你在写插件"

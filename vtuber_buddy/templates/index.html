@@ -14,23 +14,27 @@
       <main class="stage-card">
         <header class="topbar">
           <div>
-            <p class="eyebrow">AstrBot Plugin</p>
+            <p class="eyebrow">AstrBot Pet Plugin</p>
             <h1 class="title">VTuber Buddy</h1>
           </div>
           <div class="topbar-actions">
             <span class="provider-pill" id="providerLabel">加载中</span>
-            <button class="ghost-button" id="feedButton" type="button">投喂</button>
+            <button class="ghost-button" id="feedButton" type="button">喂食</button>
+            <button class="ghost-button" id="cleanButton" type="button">清洁</button>
+            <button class="ghost-button" id="workButton" type="button">打工</button>
             <button class="solid-button" id="settingsToggle" type="button">设置</button>
           </div>
         </header>
 
         <section class="stage-panel">
-          <div class="speech-bubble" id="speechBubble">你好，我已经在这里了。</div>
+          <div class="speech-bubble" id="speechBubble">我在这里，今天也会好好陪着你。</div>
 
           <div class="live2d-frame" id="live2dFrame">
             <div class="stage-badges">
-              <span class="provider-pill compact-pill" id="live2dStatus">Live2D 未就绪</span>
-              <span class="provider-pill compact-pill subtle-pill" id="emotionLabel">neutral</span>
+              <span class="provider-pill compact-pill" id="live2dStatus">Live2D 初始化中</span>
+              <span class="provider-pill compact-pill subtle-pill" id="emotionLabel"
+                >neutral</span
+              >
             </div>
 
             <div class="live2d-stage hidden" id="live2dStage">
@@ -64,11 +68,16 @@
           </div>
         </section>
 
-        <section class="status-strip">
+        <section class="stats-grid">
           <article class="status-card">
-            <span>饱食度</span>
+            <span>饱食</span>
             <strong id="satietyValue">0</strong>
             <div class="meter"><i id="satietyBar"></i></div>
+          </article>
+          <article class="status-card">
+            <span>清洁</span>
+            <strong id="cleanlinessValue">0</strong>
+            <div class="meter"><i id="cleanlinessBar"></i></div>
           </article>
           <article class="status-card">
             <span>心情</span>
@@ -76,14 +85,35 @@
             <div class="meter"><i id="moodBar"></i></div>
           </article>
           <article class="status-card">
-            <span>好感</span>
+            <span>精力</span>
+            <strong id="energyValue">0</strong>
+            <div class="meter"><i id="energyBar"></i></div>
+          </article>
+          <article class="status-card">
+            <span>健康</span>
+            <strong id="healthValue">0</strong>
+            <div class="meter"><i id="healthBar"></i></div>
+          </article>
+          <article class="status-card">
+            <span>亲密</span>
             <strong id="affectionValue">0</strong>
             <div class="meter"><i id="affectionBar"></i></div>
           </article>
-          <article class="status-card status-note">
+          <article class="status-card meta-card">
+            <span>等级</span>
+            <strong id="levelValue">Lv.1</strong>
+            <p id="expValue">成长 0 / 0</p>
+          </article>
+          <article class="status-card meta-card">
+            <span>金币</span>
+            <strong id="coinsValue">0</strong>
+            <p id="workLabel">空闲</p>
+          </article>
+          <article class="status-card meta-card wide-card">
             <span>关系</span>
-            <strong id="affectionTitle">刚认识</strong>
-            <p id="statusHint">状态稳定</p>
+            <strong id="affectionTitle">初次贴贴</strong>
+            <p id="conditionLabel">稳定</p>
+            <p id="statusHint">状态稳定，适合继续互动。</p>
           </article>
         </section>
 
@@ -101,7 +131,7 @@
             type="text"
             maxlength="140"
             autocomplete="off"
-            placeholder="说点什么，或者直接摸摸她……"
+            placeholder="和她聊聊天，或者直接摸头、喂食、清洁。"
           />
           <button class="solid-button" id="sendButton" type="submit">发送</button>
         </form>
@@ -140,7 +170,7 @@
             />
           </label>
           <p class="settings-tip">
-            外部 URL 有值时会覆盖内置模型，但动作和表情映射可能不可用。
+            外部 URL 会覆盖内置模型，但动作和表情映射不一定完整。
           </p>
           <label class="checkbox-row">
             <input id="mouseFollowInput" name="live2d_mouse_follow_enabled" type="checkbox" />
@@ -148,7 +178,9 @@
           </label>
           <div class="settings-inline-actions">
             <button class="ghost-button" id="resetViewButton" type="button">重置视角</button>
-            <button class="ghost-button" id="clearCustomModelButton" type="button">清空外链</button>
+            <button class="ghost-button" id="clearCustomModelButton" type="button">
+              清空外链
+            </button>
           </div>
           <label>
             <span>主题色</span>
