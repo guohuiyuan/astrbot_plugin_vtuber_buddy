@@ -31,9 +31,27 @@
   },
   "memory_limit": {
     "description": "Memory Limit",
-    "hint": "每个 Buddy 会话最多保留多少条长期记忆。",
+    "hint": "每个 Buddy 会话短期备忘录的保留条数。",
     "type": "int",
     "default": 12
+  },
+  "long_term_memory_limit": {
+    "description": "Long-term Memory Limit",
+    "hint": "每个 Buddy 会话可保留的 SQLite 长期记忆上限。",
+    "type": "int",
+    "default": 40
+  },
+  "memory_recall_limit": {
+    "description": "Memory Recall Limit",
+    "hint": "每次聊天注入到 Prompt 的长期记忆条数。",
+    "type": "int",
+    "default": 4
+  },
+  "memory_panel_limit": {
+    "description": "Memory Panel Limit",
+    "hint": "状态接口中返回的长期记忆条数。",
+    "type": "int",
+    "default": 8
   },
   "satiety_decay_per_hour": {
     "description": "Satiety Decay / Hour",

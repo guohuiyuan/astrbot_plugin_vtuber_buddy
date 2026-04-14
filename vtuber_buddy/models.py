@@ -83,6 +83,53 @@ class MemoryFact:
 
 
 @dataclass(slots=True)
+class BuddyLongTermMemory:
+    content: str
+    category: str = "recent_update"
+    summary: str = ""
+    source: str = "chat"
+    weight: int = 1
+    salience: float = 0.5
+    confidence: float = 0.5
+    keywords: list[str] = field(default_factory=list)
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+    last_recalled_at: str = ""
+    recall_count: int = 0
+    memory_id: int | None = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> BuddyLongTermMemory:
+        data = data or {}
+        keywords = data.get("keywords", [])
+        if not isinstance(keywords, list):
+            keywords = []
+        return cls(
+            content=str(data.get("content", "")).strip(),
+            category=str(data.get("category", "recent_update")).strip()
+            or "recent_update",
+            summary=str(data.get("summary", "")).strip(),
+            source=str(data.get("source", "chat")).strip() or "chat",
+            weight=max(1, int(data.get("weight", 1))),
+            salience=clamp(float(data.get("salience", 0.5)), 0.0, 2.0),
+            confidence=clamp(float(data.get("confidence", 0.5)), 0.0, 1.0),
+            keywords=[str(item).strip() for item in keywords if str(item).strip()],
+            created_at=str(data.get("created_at", utc_now())),
+            updated_at=str(data.get("updated_at", utc_now())),
+            last_recalled_at=str(data.get("last_recalled_at", "")).strip(),
+            recall_count=max(0, int(data.get("recall_count", 0))),
+            memory_id=(
+                None
+                if data.get("memory_id") in {None, ""}
+                else int(data.get("memory_id"))
+            ),
+        )
+
+
+@dataclass(slots=True)
 class BuddySettings:
     buddy_name: str = "Buddy"
     user_name: str = "主人"

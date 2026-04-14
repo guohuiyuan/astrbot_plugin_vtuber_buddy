@@ -5,9 +5,9 @@ import json
 import sqlite3
 from pathlib import Path
 
-from .models import BuddySession
+from .models import BuddyLongTermMemory, BuddySession
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class BuddyStore:
@@ -29,6 +29,54 @@ class BuddyStore:
     async def save_session(self, session: BuddySession) -> None:
         async with self._lock:
             await asyncio.to_thread(self._save_session_sync, session)
+
+    async def list_long_term_memories(
+        self,
+        session_id: str,
+        *,
+        limit: int | None = None,
+    ) -> list[BuddyLongTermMemory]:
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._list_long_term_memories_sync,
+                session_id,
+                limit,
+            )
+
+    async def upsert_long_term_memory(
+        self,
+        session_id: str,
+        memory: BuddyLongTermMemory,
+    ) -> BuddyLongTermMemory:
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._upsert_long_term_memory_sync,
+                session_id,
+                memory,
+            )
+
+    async def trim_long_term_memories(self, session_id: str, limit: int) -> None:
+        async with self._lock:
+            await asyncio.to_thread(
+                self._trim_long_term_memories_sync,
+                session_id,
+                limit,
+            )
+
+    async def record_memory_recall(
+        self,
+        session_id: str,
+        memory_ids: list[int],
+        *,
+        recalled_at: str,
+    ) -> None:
+        async with self._lock:
+            await asyncio.to_thread(
+                self._record_memory_recall_sync,
+                session_id,
+                memory_ids,
+                recalled_at,
+            )
 
     def _initialize_sync(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -199,6 +247,222 @@ class BuddyStore:
                     ],
                 )
 
+    def _list_long_term_memories_sync(
+        self,
+        session_id: str,
+        limit: int | None = None,
+    ) -> list[BuddyLongTermMemory]:
+        if not self.path.exists():
+            return []
+
+        with self._connect() as conn:
+            self._create_schema(conn)
+            if limit is None:
+                rows = conn.execute(
+                    """
+                    SELECT memory_id, category, content, summary, source, weight,
+                           salience, confidence, keywords_json, created_at,
+                           updated_at, last_recalled_at, recall_count
+                    FROM long_term_memories
+                    WHERE session_id = ?
+                    ORDER BY updated_at DESC, salience DESC, weight DESC, memory_id DESC
+                    """,
+                    (session_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT memory_id, category, content, summary, source, weight,
+                           salience, confidence, keywords_json, created_at,
+                           updated_at, last_recalled_at, recall_count
+                    FROM long_term_memories
+                    WHERE session_id = ?
+                    ORDER BY updated_at DESC, salience DESC, weight DESC, memory_id DESC
+                    LIMIT ?
+                    """,
+                    (session_id, max(1, int(limit))),
+                ).fetchall()
+        return [self._long_term_memory_from_row(row) for row in rows]
+
+    def _upsert_long_term_memory_sync(
+        self,
+        session_id: str,
+        memory: BuddyLongTermMemory,
+    ) -> BuddyLongTermMemory:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        normalized_content = self._normalize_memory_key(memory.content)
+        if not normalized_content:
+            return memory
+
+        prepared = BuddyLongTermMemory.from_dict(memory.to_dict())
+        prepared.content = prepared.content.strip()
+        prepared.summary = prepared.summary.strip() or prepared.content
+        prepared.category = prepared.category.strip() or "recent_update"
+        prepared.source = prepared.source.strip() or "chat"
+        prepared.keywords = self._normalize_keywords(prepared.keywords)
+        prepared.weight = max(1, int(prepared.weight))
+        prepared.salience = max(0.0, min(2.0, float(prepared.salience)))
+        prepared.confidence = max(0.0, min(1.0, float(prepared.confidence)))
+        prepared.created_at = prepared.created_at or prepared.updated_at
+        prepared.updated_at = prepared.updated_at or prepared.created_at
+
+        with self._connect() as conn:
+            self._create_schema(conn)
+            with conn:
+                existing_row = conn.execute(
+                    """
+                    SELECT memory_id, category, content, summary, source, weight,
+                           salience, confidence, keywords_json, created_at,
+                           updated_at, last_recalled_at, recall_count
+                    FROM long_term_memories
+                    WHERE session_id = ? AND category = ? AND normalized_content = ?
+                    """,
+                    (
+                        session_id,
+                        prepared.category,
+                        normalized_content,
+                    ),
+                ).fetchone()
+
+                if existing_row is None:
+                    cursor = conn.execute(
+                        """
+                        INSERT INTO long_term_memories (
+                            session_id,
+                            category,
+                            content,
+                            normalized_content,
+                            summary,
+                            source,
+                            weight,
+                            salience,
+                            confidence,
+                            keywords_json,
+                            created_at,
+                            updated_at,
+                            last_recalled_at,
+                            recall_count
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            session_id,
+                            prepared.category,
+                            prepared.content,
+                            normalized_content,
+                            prepared.summary,
+                            prepared.source,
+                            prepared.weight,
+                            prepared.salience,
+                            prepared.confidence,
+                            self._dumps_list(prepared.keywords),
+                            prepared.created_at,
+                            prepared.updated_at,
+                            prepared.last_recalled_at,
+                            prepared.recall_count,
+                        ),
+                    )
+                    prepared.memory_id = int(cursor.lastrowid)
+                    return prepared
+
+                existing = self._long_term_memory_from_row(existing_row)
+                merged_keywords = self._normalize_keywords(
+                    existing.keywords + prepared.keywords
+                )
+                merged = BuddyLongTermMemory(
+                    memory_id=existing.memory_id,
+                    content=prepared.content or existing.content,
+                    category=existing.category,
+                    summary=prepared.summary or existing.summary or prepared.content,
+                    source=prepared.source or existing.source,
+                    weight=max(1, existing.weight + prepared.weight),
+                    salience=max(existing.salience, prepared.salience),
+                    confidence=max(existing.confidence, prepared.confidence),
+                    keywords=merged_keywords,
+                    created_at=existing.created_at,
+                    updated_at=prepared.updated_at,
+                    last_recalled_at=existing.last_recalled_at,
+                    recall_count=existing.recall_count,
+                )
+                conn.execute(
+                    """
+                    UPDATE long_term_memories
+                    SET content = ?,
+                        summary = ?,
+                        source = ?,
+                        weight = ?,
+                        salience = ?,
+                        confidence = ?,
+                        keywords_json = ?,
+                        updated_at = ?
+                    WHERE memory_id = ?
+                    """,
+                    (
+                        merged.content,
+                        merged.summary,
+                        merged.source,
+                        merged.weight,
+                        merged.salience,
+                        merged.confidence,
+                        self._dumps_list(merged.keywords),
+                        merged.updated_at,
+                        merged.memory_id,
+                    ),
+                )
+                return merged
+
+    def _trim_long_term_memories_sync(self, session_id: str, limit: int) -> None:
+        safe_limit = max(1, int(limit))
+        if not self.path.exists():
+            return
+
+        with self._connect() as conn:
+            self._create_schema(conn)
+            with conn:
+                conn.execute(
+                    """
+                    DELETE FROM long_term_memories
+                    WHERE memory_id IN (
+                        SELECT memory_id
+                        FROM long_term_memories
+                        WHERE session_id = ?
+                        ORDER BY salience DESC, weight DESC, updated_at DESC, memory_id DESC
+                        LIMIT -1 OFFSET ?
+                    )
+                    """,
+                    (session_id, safe_limit),
+                )
+
+    def _record_memory_recall_sync(
+        self,
+        session_id: str,
+        memory_ids: list[int],
+        recalled_at: str,
+    ) -> None:
+        ids: list[int] = []
+        for item in memory_ids:
+            if item is None:
+                continue
+            value = int(item)
+            if value > 0:
+                ids.append(value)
+        if not ids or not self.path.exists():
+            return
+
+        placeholders = ",".join("?" for _ in ids)
+        with self._connect() as conn:
+            self._create_schema(conn)
+            with conn:
+                conn.execute(
+                    f"""
+                    UPDATE long_term_memories
+                    SET last_recalled_at = ?,
+                        recall_count = recall_count + 1
+                    WHERE session_id = ?
+                      AND memory_id IN ({placeholders})
+                    """,
+                    (recalled_at, session_id, *ids),
+                )
+
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path)
         connection.row_factory = sqlite3.Row
@@ -260,6 +524,39 @@ class BuddyStore:
                     FOREIGN KEY (session_id) REFERENCES sessions(session_id)
                         ON DELETE CASCADE
                 )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS long_term_memories (
+                    memory_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    normalized_content TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    weight INTEGER NOT NULL,
+                    salience REAL NOT NULL,
+                    confidence REAL NOT NULL,
+                    keywords_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_recalled_at TEXT NOT NULL,
+                    recall_count INTEGER NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_long_term_memories_unique
+                ON long_term_memories (session_id, category, normalized_content)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_long_term_memories_lookup
+                ON long_term_memories (session_id, updated_at DESC, salience DESC, weight DESC)
                 """
             )
             conn.execute(
@@ -404,3 +701,50 @@ class BuddyStore:
     @staticmethod
     def _dumps(payload: dict) -> str:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+    @staticmethod
+    def _dumps_list(payload: list[str]) -> str:
+        return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+    @staticmethod
+    def _loads_list(text: str) -> list[str]:
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(payload, list):
+            return []
+        return [str(item).strip() for item in payload if str(item).strip()]
+
+    @staticmethod
+    def _normalize_memory_key(text: str) -> str:
+        return "".join(str(text or "").casefold().split())
+
+    @staticmethod
+    def _normalize_keywords(values: list[str]) -> list[str]:
+        seen: set[str] = set()
+        keywords: list[str] = []
+        for raw_value in values:
+            value = str(raw_value or "").strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            keywords.append(value)
+        return keywords[:24]
+
+    def _long_term_memory_from_row(self, row: sqlite3.Row) -> BuddyLongTermMemory:
+        return BuddyLongTermMemory(
+            memory_id=int(row["memory_id"]),
+            category=str(row["category"]),
+            content=str(row["content"]),
+            summary=str(row["summary"]),
+            source=str(row["source"]),
+            weight=max(1, int(row["weight"])),
+            salience=float(row["salience"]),
+            confidence=float(row["confidence"]),
+            keywords=self._loads_list(str(row["keywords_json"])),
+            created_at=str(row["created_at"]),
+            updated_at=str(row["updated_at"]),
+            last_recalled_at=str(row["last_recalled_at"]),
+            recall_count=max(0, int(row["recall_count"])),
+        )

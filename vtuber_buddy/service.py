@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .bridge import BuddyChatBackend
 from .live2d_service import BuddyLive2DService
+from .memory_service import BuddyMemoryService
 from .models import (
     AFFECTION_MAX,
     ENERGY_MAX,
@@ -17,6 +18,7 @@ from .models import (
     ILLNESS_MAX,
     MAX_LEVEL,
     MOOD_MAX,
+    BuddyLongTermMemory,
     BuddyReply,
     BuddySession,
     BuddyWorkState,
@@ -158,7 +160,22 @@ def _recent_history_text(session: BuddySession) -> str:
     return "\n".join(lines)
 
 
-def build_buddy_system_prompt(session: BuddySession) -> str:
+def _long_term_memory_lines(memories: list[BuddyLongTermMemory] | None) -> str:
+    if not memories:
+        return "- 暂无命中的长期记忆"
+
+    lines = []
+    for item in memories:
+        label = item.category.replace("_", " ")
+        lines.append(f"- [{label}] {item.summary or item.content}")
+    return "\n".join(lines)
+
+
+def build_buddy_system_prompt(
+    session: BuddySession,
+    *,
+    recalled_memories: list[BuddyLongTermMemory] | None = None,
+) -> str:
     stats = session.stats
     capacity = need_capacity(stats.level)
     memory_lines = "\n".join(
@@ -167,6 +184,7 @@ def build_buddy_system_prompt(session: BuddySession) -> str:
     if not memory_lines:
         memory_lines = "- 目前还没有稳定记忆"
 
+    recalled_lines = _long_term_memory_lines(recalled_memories)
     suffix = session.settings.system_prompt_suffix.strip()
     history_lines = _recent_history_text(session)
     return (
@@ -185,13 +203,16 @@ def build_buddy_system_prompt(session: BuddySession) -> str:
         f"Condition: {_condition_label(session)}\n"
         f"Status hint: {_status_summary(session)}\n"
         f"Work state: {_work_status_summary(session)}\n"
-        "Known user memories:\n"
+        "Recalled long-term memories:\n"
+        f"{recalled_lines}\n"
+        "Recent stable notes:\n"
         f"{memory_lines}\n"
         "Recent dialogue:\n"
         f"{history_lines}\n"
         "Reply in the same language as the user's message.\n"
         "Keep the visible spoken reply natural and brief, usually within 80 Chinese characters.\n"
         "If the buddy is hungry, dirty, sick, or tired, the tone can show it, but never become hostile.\n"
+        "When the user asks about past preferences, plans, or personal facts, prefer the recalled long-term memories if they are relevant.\n"
         "Return ONLY one JSON object with these keys:\n"
         '{"reply":"text","emotion":"neutral|happy|shy|excited|grumpy|concerned|sleepy","motion":"idle|wave|nod|bounce|pout|blink","memory":"short stable fact or empty string"}\n'
         "Only write a non-empty memory when the user reveals a stable preference, fact, or recurring habit worth remembering.\n"
@@ -293,6 +314,10 @@ class BuddyConversationService:
         self.plugin_data_dir = plugin_data_dir
         self.runtime_config = runtime_config
         self.live2d_service = live2d_service
+        self.memory_service = BuddyMemoryService(
+            store=store,
+            runtime_config=runtime_config,
+        )
         self._session_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def initialize(self) -> None:
@@ -569,13 +594,20 @@ class BuddyConversationService:
 
             session.history.append(ChatTurn(role="user", text=clean_message))
             heuristic_memory = self._heuristic_memory(clean_message)
+            recalled_memories = await self.memory_service.recall(
+                session_id=session.session_id,
+                query=clean_message,
+            )
 
             try:
                 backend_result = await self.chat_backend.request_reply(
                     session_id=session.session_id,
                     user_message=clean_message,
                     prompt_context={
-                        "system_prompt": build_buddy_system_prompt(session),
+                        "system_prompt": build_buddy_system_prompt(
+                            session,
+                            recalled_memories=recalled_memories,
+                        ),
                     },
                 )
                 reply = buddy_reply_from_payload(
@@ -601,12 +633,20 @@ class BuddyConversationService:
                 )
             )
             self._remember(session, reply.memory or heuristic_memory)
+            await self.memory_service.remember(
+                session=session,
+                user_message=clean_message,
+                llm_memory=reply.memory or heuristic_memory,
+            )
             self._after_chat(session, reply)
             self._trim_history(session)
             self._touch_timestamps(session)
             self._apply_level_up(session)
             await self.store.save_session(session)
-        return await self._session_payload(session)
+        return await self._session_payload(
+            session,
+            recalled_memories=recalled_memories,
+        )
 
     def _apply_decay(self, session: BuddySession) -> dict[str, bool]:
         now = datetime.now(UTC)
@@ -900,9 +940,18 @@ class BuddyConversationService:
             "reward_experience": session.work.reward_experience,
         }
 
-    async def _session_payload(self, session: BuddySession) -> dict:
+    async def _session_payload(
+        self,
+        session: BuddySession,
+        *,
+        recalled_memories: list[BuddyLongTermMemory] | None = None,
+    ) -> dict:
         stats = session.stats
         capacity = need_capacity(stats.level)
+        recent_long_term_memories = await self.memory_service.list_recent(
+            session_id=session.session_id,
+            limit=max(4, int(self.runtime_config.get("memory_panel_limit", 8))),
+        )
         return {
             "session_id": session.session_id,
             "speech": session.speech,
@@ -928,6 +977,10 @@ class BuddyConversationService:
             "settings": session.settings.to_dict(),
             "history": [item.to_dict() for item in session.history[-8:]],
             "memories": [item.to_dict() for item in session.memories[-8:]],
+            "recalled_memories": [item.to_dict() for item in (recalled_memories or [])],
+            "long_term_memories": [
+                item.to_dict() for item in recent_long_term_memories
+            ],
             "provider": self.chat_backend.describe(),
             "live2d": await self._live2d_payload(session),
         }

@@ -141,3 +141,4 @@ async def test_web_routes_round_trip(tmp_path):
             assert chat_payload["status"] == "ok"
             assert chat_payload["data"]["speech"] == "收到，我会一直看着你。"
             assert chat_payload["data"]["memories"][0]["content"] == "你在写插件"
+            assert chat_payload["data"]["long_term_memories"][0]["content"] == "用户在写插件"

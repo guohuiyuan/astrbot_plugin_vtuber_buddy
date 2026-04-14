@@ -23,9 +23,10 @@ class StubChatBackend:
     def __init__(self, reply_text: str, structured: dict | None = None) -> None:
         self.reply_text = reply_text
         self.structured = structured
+        self.calls: list[dict] = []
 
     async def request_reply(self, **kwargs) -> BuddyBackendResult:
-        del kwargs
+        self.calls.append(dict(kwargs))
         return BuddyBackendResult(
             reply_text=self.reply_text,
             structured=self.structured,
@@ -142,10 +143,27 @@ async def test_chat_can_store_memory_without_duplicates(tmp_path):
 
     result = await service.chat("memory-session", "我喜欢抹茶")
     assert result["memories"][0]["content"] == "你喜欢抹茶"
+    assert result["long_term_memories"][0]["content"] == "用户喜欢抹茶"
 
     result = await service.chat("memory-session", "我还是喜欢抹茶")
     assert len(result["memories"]) == 1
+    assert len(result["long_term_memories"]) == 1
+    assert result["long_term_memories"][0]["weight"] >= 2
     assert result["stats"]["affection"] > 18
+
+
+@pytest.mark.asyncio
+async def test_chat_recalls_long_term_memory_into_prompt(tmp_path):
+    service, _ = build_service(tmp_path, memory_recall_limit=4)
+    await service.initialize()
+
+    await service.chat("recall-session", "我喜欢抹茶")
+    result = await service.chat("recall-session", "你还记得我喜欢什么吗")
+
+    prompt = service.chat_backend.calls[-1]["prompt_context"]["system_prompt"]
+    assert "Recalled long-term memories:" in prompt
+    assert "用户喜欢抹茶" in prompt
+    assert result["recalled_memories"][0]["content"] == "用户喜欢抹茶"
 
 
 @pytest.mark.asyncio
